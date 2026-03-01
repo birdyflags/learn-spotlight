@@ -77,10 +77,10 @@ export default function AIHubPage() {
             Keep answers encouraging, use emojis, and be concise. 
             Respond in ${language === 'ar' ? 'Arabic (mainly)' : 'English'}.`;
 
-            // Use Puter.js chat with GPT-4o (the smartest free model on Puter)
+            // Use Puter.js chat with a more standard model string 
             const response = await window.puter.ai.chat(
                 `${systemPrompt}\n\nStudent says: ${text}`,
-                { model: 'openai/gpt-4o' }
+                { model: 'gpt-4o-mini' } // Switching to mini for faster/more universal support
             );
 
             // Puter.js returns just the text if successful, or an object depending on version
@@ -92,10 +92,10 @@ export default function AIHubPage() {
             ]);
             speak(responseText);
         } catch (error: any) {
-            console.error("AI Error:", error);
+            console.error("DEBUG: Chat Error Details Object:", error);
             const errorMsg = language === "ar"
                 ? "عذرًا، يبدو أن هناك مشكلة في الاتصال بالمدرب."
-                : "Unable to connect to Puter Brain. Details: " + error.message;
+                : `Unable to connect (405 Trace). Please hard-refresh your page (Ctrl+F5) to clear old cache. Detail: ${error.message}`;
 
             setMessages(prev => [
                 ...prev.filter(m => m.id !== "loading"),
@@ -127,6 +127,7 @@ export default function AIHubPage() {
                     }
 
                     // Use Puter.js speech-to-text
+                    console.log("DEBUG: Calling Puter speech2txt...");
                     const transcription = await window.puter.ai.speech2txt(blob);
                     const transcribedText = typeof transcription === 'string' ? transcription : (transcription.text || transcription.toString());
 
@@ -140,12 +141,11 @@ export default function AIHubPage() {
                     sendMessage("🎤 " + transcribedText);
                 } catch (error: any) {
                     setIsProcessing(false);
-                    console.error("STT Error:", error);
+                    console.error("DEBUG: STT Error Details:", error);
                     setMessages(prev => [
                         ...prev.filter(m => m.id !== "loading" && !m.text.includes("Processing")),
-                        { id: `err-${Date.now()}`, text: (language === "ar" ? "فشل تحويل الصوت إلى نص." : "Voice-to-text failed: ") + error.message, sender: "ai", timestamp: new Date() },
+                        { id: `err-${Date.now()}`, text: (language === "ar" ? "فشل تحويل الصوت إلى نص." : "Voice-to-text failed (405 Check). Hard-refresh might be needed. Detail: ") + error.message, sender: "ai", timestamp: new Date() },
                     ]);
-                    setIsProcessing(false);
                 }
             };
             mediaRecorder.current.start();
