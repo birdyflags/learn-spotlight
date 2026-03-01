@@ -61,13 +61,21 @@ export default function AIHubPage() {
         setIsProcessing(true);
 
         try {
-            // NOTE: In a real app, this would call your actual AI API
-            // For this demo, we'll simulate a response
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            // CALLING THE NEW VERCEL BACKEND
+            const response = await fetch("/api/chat", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message: text, language })
+            });
 
-            const responseText = language === "ar"
-                ? `هذا سؤال رائع! بخصوص "${text}"، منهج Spotlight 2 يركز على التواصل الفعال. هل تريد مني أن أشرح ذلك بالتفصيل؟`
-                : `That's a great question! Regarding "${text}", Spotlight 2 emphasizes practical communication. Would you like me to dive deeper into this rule?`;
+            const data = await response.json();
+
+            if (!response.ok) {
+                // FALLBACK for local development without the API configured
+                throw new Error(data.error || "Failed Brain Connection");
+            }
+
+            const responseText = data.text;
 
             setMessages(prev => [
                 ...prev.filter(m => m.id !== "loading"),
@@ -75,9 +83,14 @@ export default function AIHubPage() {
             ]);
             speak(responseText);
         } catch (error: any) {
+            console.error(error);
+            const errorMsg = language === "ar"
+                ? "عذرًا، الدماغ متعب حاليًا. تأكد من أن مفتاح GEMINI_API_KEY مفعل في Vercel وحاول مجددًا. 😴"
+                : "Unable to connect to the brain (Check GEMINI_API_KEY environment variable on Vercel). Using fallback... 😴";
+
             setMessages(prev => [
                 ...prev.filter(m => m.id !== "loading"),
-                { id: `err-${Date.now()}`, text: "Unable to connect to the brain. Please try again later.", sender: "ai", timestamp: new Date() },
+                { id: `err-${Date.now()}`, text: errorMsg, sender: "ai", timestamp: new Date() },
             ]);
         } finally {
             setIsProcessing(false);
