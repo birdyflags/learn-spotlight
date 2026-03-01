@@ -45,10 +45,10 @@ export default function AIHubPage() {
         if (!("speechSynthesis" in window)) return;
         window.speechSynthesis.cancel();
         const u = new SpeechSynthesisUtterance(text);
-        u.lang = "en-US";
+        u.lang = language === "ar" ? "ar-XA" : "en-US";
         u.rate = 1.0;
         window.speechSynthesis.speak(u);
-    }, []);
+    }, [language]);
 
     const sendMessage = useCallback(async (text: string) => {
         if (!text.trim() || isProcessing) return;
@@ -61,20 +61,26 @@ export default function AIHubPage() {
         setIsProcessing(true);
 
         try {
-            // CALLING THE NEW VERCEL BACKEND
-            const response = await fetch("/api/chat", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ message: text, language })
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.error || `Server responded with ${response.status}`);
+            // @ts-ignore
+            if (!window.puter) {
+                throw new Error("Puter.js not loaded yet...");
             }
 
-            const data = await response.json();
-            const responseText = data.text;
+            const systemPrompt = `You are "Spotlight Coach", a world-class AI English Tutor specialized in the "Spotlight 2" Moroccan curriculum (8th Grade). 
+            Units: Jobs, Health, Food, Tech, Fashion, Nature, Leisure, School, Travel.
+            Current UI language: ${language === 'ar' ? 'Arabic' : 'English'}. 
+            Keep answers encouraging, use emojis, and be concise. 
+            Respond in ${language === 'ar' ? 'Arabic'(mainly) : 'English'}.`;
+
+            // Use Puter.js chat with GPT-4o (the smartest free model on Puter)
+            // @ts-ignore
+            const response = await window.puter.ai.chat(
+                `${systemPrompt}\n\nStudent says: ${text}`,
+                { model: 'openai/gpt-4o' }
+            );
+
+            // Puter.js returns just the text if successful, or an object depending on version
+            const responseText = typeof response === 'string' ? response : (response.message?.content || response.toString());
 
             setMessages(prev => [
                 ...prev.filter(m => m.id !== "loading"),
@@ -82,17 +88,10 @@ export default function AIHubPage() {
             ]);
             speak(responseText);
         } catch (error: any) {
-            console.error(error);
-            let errorMsg = language === "ar"
-                ? "عذرًا، الدماغ متعب حاليًا."
-                : "Unable to connect to the brain.";
-
-            // Helpful debugging hint 
-            if (window.location.hostname === "localhost") {
-                errorMsg += " (Note: /api routes only work on Vercel, not localhost)";
-            } else {
-                errorMsg += ` Detail: ${error.message}`;
-            }
+            console.error("AI Error:", error);
+            const errorMsg = language === "ar"
+                ? "عذرًا، يبدو أن هناك مشكلة في الاتصال بالمدرب."
+                : "Unable to connect to Puter Brain. Details: " + error.message;
 
             setMessages(prev => [
                 ...prev.filter(m => m.id !== "loading"),
@@ -110,26 +109,41 @@ export default function AIHubPage() {
             audioChunks.current = [];
             mediaRecorder.current.ondataavailable = (e) => audioChunks.current.push(e.data);
             mediaRecorder.current.onstop = async () => {
-                // const blob = new Blob(audioChunks.current, { type: "audio/wav" }); // Removed unused 'blob' variable
+                const blob = new Blob(audioChunks.current, { type: "audio/wav" });
                 setIsProcessing(true);
                 setMessages(prev => [
                     ...prev,
-                    { id: `vu-${Date.now()}`, text: "🎤 " + (language === "ar" ? "رسالة صوتية" : "Voice message"), sender: "user", timestamp: new Date() },
+                    { id: `vu-${Date.now()}`, text: "🎤 " + (language === "ar" ? "جاري معالجة الصوت..." : "Processing voice..."), sender: "user", timestamp: new Date() },
                     { id: "loading", text: "", sender: "ai", timestamp: new Date(), isLoading: true },
                 ]);
 
-                // Simulate voice processing
-                await new Promise(resolve => setTimeout(resolve, 2000));
-                const responseText = language === "ar"
-                    ? "سمعت صوتك بوضوح! نطقك يتحسن بشكل ملحوظ."
-                    : "I heard you clearly! Your pronunciation is improving significantly.";
+                try {
+                    // @ts-ignore
+                    if (!window.puter) {
+                        throw new Error("Puter.js not loaded.");
+                    }
 
-                setMessages(prev => [
-                    ...prev.filter(m => m.id !== "loading"),
-                    { id: `ai-${Date.now()}`, text: responseText, sender: "ai", timestamp: new Date() },
-                ]);
-                speak(responseText);
-                setIsProcessing(false);
+                    // Use Puter.js speech-to-text
+                    // @ts-ignore
+                    const transcription = await window.puter.ai.speech2txt(blob);
+                    const transcribedText = typeof transcription === 'string' ? transcription : (transcription.text || transcription.toString());
+
+                    // Replace the "Processing voice..." message with the actual transcribed text
+                    setMessages(prev => [
+                        ...prev.filter(m => !m.id?.startsWith('vu-') || m.text.includes("Processing")),
+                        { id: `t-u-${Date.now()}`, text: "🎤 " + transcribedText, sender: "user", timestamp: new Date() }
+                    ].filter(m => m.id !== 'loading' && !m.text.includes("Processing")));
+
+                    // Now send this transcribed text to the AI
+                    sendMessage(transcribedText);
+                } catch (error: any) {
+                    console.error("STT Error:", error);
+                    setMessages(prev => [
+                        ...prev.filter(m => m.id !== "loading"),
+                        { id: `err-${Date.now()}`, text: (language === "ar" ? "فشل تحويل الصوت إلى نص." : "Voice-to-text failed: ") + error.message, sender: "ai", timestamp: new Date() },
+                    ]);
+                    setIsProcessing(false);
+                }
             };
             mediaRecorder.current.start();
             setIsRecording(true);
