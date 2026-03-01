@@ -1,0 +1,11 @@
+"use client";
+
+import { LanguageProvider } from "context/LanguageContext";
+
+export function AppProviders({ children }: { children: React.ReactNode }) {
+    return (
+        <LanguageProvider>
+            {children}
+        </LanguageProvider>
+    );
+}
