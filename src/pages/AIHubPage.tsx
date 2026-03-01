@@ -68,13 +68,12 @@ export default function AIHubPage() {
                 body: JSON.stringify({ message: text, language })
             });
 
-            const data = await response.json();
-
             if (!response.ok) {
-                // FALLBACK for local development without the API configured
-                throw new Error(data.error || "Failed Brain Connection");
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || `Server responded with ${response.status}`);
             }
 
+            const data = await response.json();
             const responseText = data.text;
 
             setMessages(prev => [
@@ -84,9 +83,16 @@ export default function AIHubPage() {
             speak(responseText);
         } catch (error: any) {
             console.error(error);
-            const errorMsg = language === "ar"
-                ? "عذرًا، الدماغ متعب حاليًا. تأكد من أن مفتاح GEMINI_API_KEY مفعل في Vercel وحاول مجددًا. 😴"
-                : "Unable to connect to the brain (Check GEMINI_API_KEY environment variable on Vercel). Using fallback... 😴";
+            let errorMsg = language === "ar"
+                ? "عذرًا، الدماغ متعب حاليًا."
+                : "Unable to connect to the brain.";
+
+            // Helpful debugging hint 
+            if (window.location.hostname === "localhost") {
+                errorMsg += " (Note: /api routes only work on Vercel, not localhost)";
+            } else {
+                errorMsg += ` Detail: ${error.message}`;
+            }
 
             setMessages(prev => [
                 ...prev.filter(m => m.id !== "loading"),
