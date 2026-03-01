@@ -20,6 +20,12 @@ const suggestedPrompts = [
     { icon: MapPin, text: "Tell me about Morocco's geography" },
 ];
 
+declare global {
+    interface Window {
+        puter: any;
+    }
+}
+
 export default function AIHubPage() {
     const { t, language } = useLanguage();
 
@@ -61,7 +67,6 @@ export default function AIHubPage() {
         setIsProcessing(true);
 
         try {
-            // @ts-ignore
             if (!window.puter) {
                 throw new Error("Puter.js not loaded yet...");
             }
@@ -70,10 +75,9 @@ export default function AIHubPage() {
             Units: Jobs, Health, Food, Tech, Fashion, Nature, Leisure, School, Travel.
             Current UI language: ${language === 'ar' ? 'Arabic' : 'English'}. 
             Keep answers encouraging, use emojis, and be concise. 
-            Respond in ${language === 'ar' ? 'Arabic'(mainly) : 'English'}.`;
+            Respond in ${language === 'ar' ? 'Arabic (mainly)' : 'English'}.`;
 
             // Use Puter.js chat with GPT-4o (the smartest free model on Puter)
-            // @ts-ignore
             const response = await window.puter.ai.chat(
                 `${systemPrompt}\n\nStudent says: ${text}`,
                 { model: 'openai/gpt-4o' }
@@ -118,28 +122,27 @@ export default function AIHubPage() {
                 ]);
 
                 try {
-                    // @ts-ignore
                     if (!window.puter) {
                         throw new Error("Puter.js not loaded.");
                     }
 
                     // Use Puter.js speech-to-text
-                    // @ts-ignore
                     const transcription = await window.puter.ai.speech2txt(blob);
                     const transcribedText = typeof transcription === 'string' ? transcription : (transcription.text || transcription.toString());
 
-                    // Replace the "Processing voice..." message with the actual transcribed text
-                    setMessages(prev => [
-                        ...prev.filter(m => !m.id?.startsWith('vu-') || m.text.includes("Processing")),
-                        { id: `t-u-${Date.now()}`, text: "🎤 " + transcribedText, sender: "user", timestamp: new Date() }
-                    ].filter(m => m.id !== 'loading' && !m.text.includes("Processing")));
+                    // Clean up temp voice messages before calling final send
+                    setMessages(prev => prev.filter(m => !m.id?.startsWith('vu-') && !m.text.includes("Processing") && m.id !== "loading"));
 
-                    // Now send this transcribed text to the AI
-                    sendMessage(transcribedText);
+                    // Allow sendMessage to run by resetting processing flag
+                    setIsProcessing(false);
+
+                    // Now let the main send logic handle the AI call 
+                    sendMessage("🎤 " + transcribedText);
                 } catch (error: any) {
+                    setIsProcessing(false);
                     console.error("STT Error:", error);
                     setMessages(prev => [
-                        ...prev.filter(m => m.id !== "loading"),
+                        ...prev.filter(m => m.id !== "loading" && !m.text.includes("Processing")),
                         { id: `err-${Date.now()}`, text: (language === "ar" ? "فشل تحويل الصوت إلى نص." : "Voice-to-text failed: ") + error.message, sender: "ai", timestamp: new Date() },
                     ]);
                     setIsProcessing(false);
@@ -188,7 +191,7 @@ export default function AIHubPage() {
                         </div>
                     </div>
                     <button onClick={clearChat} className="p-3 rounded-full glass hover:bg-white/10 transition-perceptual text-white/20 hover:text-white/60">
-                        <Trash2 className="w-4.5 h-4.5" />
+                        <Trash2 className="w-5 h-5" />
                     </button>
                 </header>
 
@@ -235,8 +238,7 @@ export default function AIHubPage() {
                                 onMouseUp={stopRecording}
                                 onTouchStart={startRecording}
                                 onTouchEnd={stopRecording}
-                                className={`w-14 h-14 md:w-16 md:h-16 rounded-full flex items-center justify-center transition-perceptual shadow-3xl relative z-10 ${isRecording ? "bg-red-600 scale-110" : "bg-white text-black hover:bg-moroccan-blue hover:text-white"
-                                    }`}
+                                className={`w-14 h-14 md:w-16 md:h-16 rounded-full flex items-center justify-center transition-perceptual shadow-3xl relative z-10 ${isRecording ? "bg-red-600 scale-110" : "bg-white text-black hover:bg-moroccan-blue hover:text-white"}`}
                             >
                                 {isRecording ? <StopCircle className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
                             </motion.button>
@@ -279,7 +281,7 @@ export default function AIHubPage() {
     );
 }
 
-function ChatBubble({ msg, onSpeak, language, t }: { msg: Message; onSpeak: () => void; language: string; t: any }) {
+function ChatBubble({ msg, onSpeak, language, t }: { msg: Message; onSpeak: () => void; language: string; t: (key: string) => string }) {
     const isAI = msg.sender === "ai";
 
     return (
