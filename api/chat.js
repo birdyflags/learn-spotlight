@@ -6,11 +6,10 @@ module.exports = async function handler(req, res) {
     }
 
     const { message, language } = req.body;
-    // Hardcoded for robustness as requested by user
-    const apiKey = "AIzaSyA3h-bXabNHwhyg4Z_5aq1uy1EVlHtHupA";
+    const apiKey = process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
-        return res.status(500).json({ error: 'GEMINI_API_KEY is missing' });
+        return res.status(500).json({ error: 'GEMINI_API_KEY is not configured on Vercel environment' });
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
